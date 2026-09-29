@@ -4,8 +4,9 @@
  * - 每个主题（分类）是一个超链接，点进去显示该主题【最新】内容
  * - 在阅读页可【前后翻页】浏览该主题下其它内容
  * - 可【切换成表格（目录）】列出该主题下所有标题，点击即读
- * - 内容来自 content/manifest.json + 各 Markdown 文件
- * 每日新增：写一篇 .md，并登记进 manifest.json（或用 tools/add_post.py）
+ * - 内容来自 content/posts.js（内置文章）+ 浏览器 localStorage（网页端录入）
+ * 网页端「✎ 录入内容」：选主题、填标题与正文，提交后立即显示（存本机）；
+ * 每日新增正式文章：写一篇 .md 并登记进 manifest.json（或用 tools/add_post.py）
  * ========================================================= */
 
 const CONFIG = {
@@ -25,21 +26,42 @@ const CONFIG = {
 const CAT_MAP = Object.fromEntries(CONFIG.categories.map(c => [c.id, c]));
 const ALL_CAT = { id: "all", label: "全部", color: "var(--accent)" };
 
+const LS_KEY = "zhiyuan_user_posts";   // 网页端录入的内容存这里
 const state = { posts: [], ready: false, cur: null };
+
+/* ---------- 本机录入内容（localStorage） ---------- */
+function loadUserPosts() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); }
+  catch (e) { return []; }
+}
+function saveUserPosts(list) {
+  localStorage.setItem(LS_KEY, JSON.stringify(list));
+}
+function refreshPosts() {
+  state.posts = (window.__POSTS__ || []).concat(loadUserPosts());
+}
 
 /* ---------- 工具 ---------- */
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s = "") => s.replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 const fmtDate = (d) => (d || "").toString();
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 function readingMinutes(t = "") {
   const cn = (t.match(/[一-龥]/g) || []).length;
   const en = (t.match(/[a-zA-Z]+/g) || []).length;
   return Math.max(1, Math.round(cn / 400 + en / 200));
 }
-// 取某分类下的文章（按日期倒序）；"all" 返回全部
+// 取某分类下的文章（按日期倒序）；"all" 返回全部。同日期时本机录入的排前面
 function postsOf(catId) {
   const list = catId === "all" ? state.posts : state.posts.filter(p => p.category === catId);
-  return list.slice().sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  return list.slice().sort((a, b) => {
+    const d = (b.date || "").localeCompare(a.date || "");
+    if (d !== 0) return d;
+    return (b.local ? 1 : 0) - (a.local ? 1 : 0);
+  });
 }
 
 /* ---------- 分类导航 ---------- */
@@ -75,12 +97,6 @@ function cardHTML(p, featured = false) {
 
 /* ---------- 首页 ---------- */
 function renderHome() {
-  $("#heroStats").innerHTML = [
-    ["主题", CONFIG.categories.length + " 类"],
-    ["已发布", state.posts.length + " 篇"],
-    ["最新", state.posts.length ? fmtDate(postsOf("all")[0].date) : "—"],
-  ].map(([k, v]) => `<div class="hero-stat"><b>${esc(v)}</b><span>${esc(k)}</span></div>`).join("");
-
   const all = postsOf("all");
   const featured = all[0];
   $("#featured").innerHTML = featured ? cardHTML(featured, true) : "";
@@ -149,6 +165,17 @@ async function renderReader(postId) {
   // 重置为阅读视图（隐藏表格）
   showTable(false);
 
+  // 本机录入的文章显示删除按钮
+  const delBtn = $("#deleteBtn");
+  delBtn.hidden = !post.local;
+  delBtn.onclick = () => {
+    if (!confirm("确定删除本机录入的《" + post.title + "》吗？")) return;
+    const remain = loadUserPosts().filter(p => p.id !== post.id);
+    saveUserPosts(remain);
+    refreshPosts();
+    location.hash = "#/cat/" + post.category;   // 回到该主题最新一篇
+  };
+
   document.title = post.title + " · " + CONFIG.siteName;
   $("#postArticle").scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -169,7 +196,61 @@ function bindCards() {
 
 /* ---------- 视图切换 ---------- */
 function showView(name) {
-  ["home", "post", "search"].forEach(v => { const el = $("#view-" + v); if (el) el.hidden = (v !== name); });
+  ["home", "post", "search", "new"].forEach(v => { const el = $("#view-" + v); if (el) el.hidden = (v !== name); });
+}
+
+/* ---------- 录入表单 ---------- */
+function initForm() {
+  const fCat = $("#fCat"), fSub = $("#fSub"), fSubWrap = $("#fSubWrap");
+  fCat.innerHTML = CONFIG.categories.map(c => `<option value="${c.id}">${esc(c.label)}</option>`).join("");
+  const miscCat = CONFIG.categories.find(c => c.id === "misc");
+  fSub.innerHTML = miscCat.sub.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
+  const syncSub = () => { fSubWrap.hidden = fCat.value !== "misc"; };
+  fCat.addEventListener("change", syncSub);
+  syncSub();
+}
+
+function handleFormSubmit(e) {
+  e.preventDefault();
+  const title = $("#fTitle").value.trim();
+  const body = $("#fBody").value.trim();
+  const summary = $("#fSummary").value.trim();
+  if (!title || !body || !summary) { alert("标题、摘要、正文都不能为空。"); return; }
+
+  const category = $("#fCat").value;
+  const subcategory = category === "misc" ? $("#fSub").value : "";
+  const author = $("#fAuthor").value.trim() || "知元编辑部";
+  const tags = $("#fTags").value.split(/[,，]/).map(t => t.trim()).filter(Boolean);
+  const date = todayStr();
+
+  // 生成不重复的 id
+  let slug = title.replace(/[\\/:*?"<>|\s]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "post";
+  const exist = new Set(state.posts.map(p => p.id));
+  let id = `${date}-${slug}`, k = 2;
+  while (exist.has(id)) id = `${date}-${slug}-${k++}`;
+
+  const post = { id, title, date, category, subcategory, summary, tags, author, body, local: true };
+  const userPosts = loadUserPosts();
+  userPosts.push(post);
+  saveUserPosts(userPosts);
+  refreshPosts();
+
+  // 清空表单，跳到新文章
+  $("#newForm").reset();
+  $("#fAuthor").value = "知元编辑部";
+  initForm();
+  location.hash = "#/post/" + id;
+}
+
+function handleExport() {
+  const userPosts = loadUserPosts();
+  if (!userPosts.length) { alert("还没有录入任何内容。"); return; }
+  const blob = new Blob([JSON.stringify(userPosts, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "录入内容导出.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 /* ---------- 路由 ---------- */
@@ -177,9 +258,15 @@ function router() {
   if (!state.ready) return;
   const hash = location.hash || "#/";
   const parts = hash.replace(/^#\//, "").split("/");
-  const [seg, param] = parts;
+  let [seg, param] = parts;
+  // 浏览器会把 hash 里的中文百分号编码，这里还原
+  try { if (param) param = decodeURIComponent(param); } catch (e) { /* 保持原样 */ }
 
-  if (seg === "cat" && param) {
+  if (seg === "new") {
+    renderNav("all");
+    showView("new");
+    window.scrollTo(0, 0);
+  } else if (seg === "cat" && param) {
     // 进入某主题：显示该主题最新一篇
     const list = postsOf(param);
     renderNav(param);
@@ -223,20 +310,26 @@ $("#randomBtn").addEventListener("click", () => {
 });
 $("#toggleTableBtn").addEventListener("click", () => showTable($("#postTable").hidden));
 
+/* ---------- 录入表单绑定 ---------- */
+$("#newForm").addEventListener("submit", handleFormSubmit);
+$("#fExport").addEventListener("click", handleExport);
+$("#fReset").addEventListener("click", () => {
+  $("#newForm").reset();
+  $("#fAuthor").value = "知元编辑部";
+  initForm();
+});
+
 /* ---------- 启动 ---------- */
 function init() {
   $("#year").textContent = new Date().getFullYear();
-  // 数据来自 content/posts.js（<script> 注入的 window.__POSTS__），无需 fetch，
-  // 因此双击打开 / 本地服务器 / GitHub Pages 三种方式都能正常加载。
-  const data = window.__POSTS__;
-  if (!Array.isArray(data) || !data.length) {
+  refreshPosts();   // 内置文章(posts.js) + 本机录入(localStorage)
+  if (!state.posts.length) {
     showView("home");
     $("#featured").innerHTML = "";
-    $("#postList").innerHTML = `<p class="empty-state">还没有任何内容。请在 <code>content/</code> 新增文章并运行 <code>python tools/add_post.py --build</code> 生成 posts.js。</p>`;
-    return;
+    $("#postList").innerHTML = `<p class="empty-state">还没有任何内容。点右上角「✎ 录入内容」写下第一篇吧。</p>`;
   }
-  state.posts = data;
   state.ready = true;
+  initForm();
   window.addEventListener("hashchange", router);
   router();
 }

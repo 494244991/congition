@@ -18,8 +18,11 @@
           <span class="brand-sub">拓宽视野 · 提升认知</span>
         </span>
       </a>
-      <div class="header-search">
-        <input id="searchInput" type="search" placeholder="搜索主题、关键词…" aria-label="搜索" />
+      <div class="header-actions">
+        <a class="btn-new" href="#/new">✎ 录入内容</a>
+        <div class="header-search">
+          <input id="searchInput" type="search" placeholder="搜索主题、关键词…" aria-label="搜索" />
+        </div>
       </div>
     </div>
   </header>
@@ -33,15 +36,6 @@
   <main class="container main" id="main">
     <!-- 首页视图 -->
     <section id="view-home" class="view">
-      <section class="hero">
-        <h1 class="hero-title">每天读懂一个世界</h1>
-        <p class="hero-desc">
-          这里为大学生而建：管理、哲学、心理、社会、表达、科技与杂谈，
-          每日一篇短文，帮你把零散的知识连成网络，慢慢长出更清醒的判断力。
-        </p>
-        <div class="hero-stats" id="heroStats"><!-- JS 注入 --></div>
-      </section>
-
       <section class="section">
         <div class="section-head">
           <h2 class="section-title">今日推荐</h2>
@@ -91,6 +85,7 @@
 
       <div class="post-foot">
         <button class="ghost-btn" id="randomBtn">🎲 随机一篇</button>
+        <button class="ghost-btn danger" id="deleteBtn" hidden>🗑 删除本文（本机录入）</button>
       </div>
     </section>
 
@@ -100,6 +95,33 @@
         <h2 class="section-title" id="searchTitle">搜索结果</h2>
       </div>
       <div id="searchList" class="post-grid"><!-- JS 注入 --></div>
+    </section>
+    <!-- 录入新内容视图 -->
+    <section id="view-new" class="view" hidden>
+      <div class="section-head">
+        <h2 class="section-title">录入新内容</h2>
+        <span class="section-hint">选择主题 → 填写标题与正文 → 提交即发布</span>
+      </div>
+      <form class="post-form" id="newForm">
+        <div class="form-row">
+          <label>主题 <select id="fCat"></select></label>
+          <label id="fSubWrap" hidden>子分类（杂谈）<select id="fSub"></select></label>
+        </div>
+        <label>标题 <input id="fTitle" type="text" required placeholder="例如：摩尔定律" /></label>
+        <div class="form-row">
+          <label>供稿人 <input id="fAuthor" type="text" value="知元编辑部" /></label>
+          <label>标签（逗号分隔，可空）<input id="fTags" type="text" placeholder="科技,迭代" /></label>
+        </div>
+        <label>一句话摘要 <input id="fSummary" type="text" required placeholder="显示在卡片上的一段简介" /></label>
+        <label>正文（支持 Markdown：# 标题、> 引用、- 列表、**加粗**）
+          <textarea id="fBody" rows="12" required placeholder="在这里粘贴或撰写正文…"></textarea></label>
+        <div class="form-actions">
+          <button type="submit" class="primary-btn" id="fSubmit">✓ 提交发布</button>
+          <button type="button" class="ghost-btn" id="fExport">⬇ 导出录入内容</button>
+          <button type="button" class="ghost-btn" id="fReset">清空表单</button>
+        </div>
+        <p class="form-hint">提交后内容保存在本浏览器（localStorage），刷新不丢失；点「导出录入内容」可下载备份文件，发给我即可合并进正式文章库。</p>
+      </form>
     </section>
   </main>
 
