@@ -432,7 +432,7 @@ function updateModeBadge() {
 function openSettings() {
   const c = loadGhConfig();
   $("#setToken").value = c.token || "";
-  $("#setRepo").value = c.repo || "";
+  $("#setRepo").value = c.repo || "494244991/congition";
   $("#setBranch").value = c.branch || "main";
   $("#setStatus").textContent = "";
   $("#settingsModal").hidden = false;
