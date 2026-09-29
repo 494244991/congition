@@ -38,7 +38,11 @@ function saveUserPosts(list) {
   localStorage.setItem(LS_KEY, JSON.stringify(list));
 }
 function refreshPosts() {
-  state.posts = (window.__POSTS__ || []).concat(loadUserPosts());
+  const base = window.__POSTS__ || [];
+  // 若某篇已存在于正式数据（posts.js，说明已提交到仓库），则丢弃本机草稿副本，避免重复显示
+  const baseIds = new Set(base.map((p) => p.id));
+  const user = loadUserPosts().filter((p) => !baseIds.has(p.id));
+  state.posts = base.concat(user);
 }
 
 /* ---------- 工具 ---------- */
@@ -210,7 +214,11 @@ function initForm() {
   syncSub();
 }
 
-function handleFormSubmit(e) {
+function slugFromTitle(title) {
+  return title.replace(/[\\/:*?"<>|\s]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "post";
+}
+
+async function handleFormSubmit(e) {
   e.preventDefault();
   const title = $("#fTitle").value.trim();
   const body = $("#fBody").value.trim();
@@ -222,24 +230,58 @@ function handleFormSubmit(e) {
   const author = $("#fAuthor").value.trim() || "知元编辑部";
   const tags = $("#fTags").value.split(/[,，]/).map(t => t.trim()).filter(Boolean);
   const date = todayStr();
+  const slug = slugFromTitle(title);
+  const proposedId = `${date}-${slug}`;
 
-  // 生成不重复的 id
-  let slug = title.replace(/[\\/:*?"<>|\s]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "post";
-  const exist = new Set(state.posts.map(p => p.id));
-  let id = `${date}-${slug}`, k = 2;
-  while (exist.has(id)) id = `${date}-${slug}-${k++}`;
+  const payload = { id: proposedId, title, date, category, subcategory, summary, tags, author, body };
 
-  const post = { id, title, date, category, subcategory, summary, tags, author, body, local: true };
+  // 优先提交到服务端（Cloudflare Pages /api/submit）：写入仓库 content/，所有人可见
+  let saved = null;
+  try {
+    const r = await fetch("/api/submit", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (r.status === 409) {
+      const j = await r.json().catch(() => ({}));
+      alert(j.error || "该标题已存在，请勿重复提交。");
+      return;
+    }
+    if (r.ok) {
+      const j = await r.json();
+      saved = { ...payload, id: (j && j.id) || proposedId, local: false };
+    } else {
+      const j = await r.json().catch(() => ({}));
+      if (j.error) console.warn("服务端提交失败：", j.error);
+    }
+  } catch (err) {
+    // 本地 / 未部署函数（如 GitHub Pages 或双击打开）：走本机草稿兜底
+  }
+
+  // 未走服务端时，存为本机 localStorage 草稿（仅自己可见，可后续合并）
+  if (!saved) {
+    const exist = new Set(state.posts.map(p => p.id));
+    let id = proposedId, n = 2;
+    while (exist.has(id)) id = `${date}-${slug}-${n++}`;
+    saved = { ...payload, id, local: true };
+  }
+
+  // 始终在本地留一份，保证提交者本人即时看到
   const userPosts = loadUserPosts();
-  userPosts.push(post);
+  const idx = userPosts.findIndex(p => p.id === saved.id);
+  if (idx >= 0) userPosts[idx] = saved; else userPosts.push(saved);
   saveUserPosts(userPosts);
   refreshPosts();
 
-  // 清空表单，跳到新文章
   $("#newForm").reset();
   $("#fAuthor").value = "知元编辑部";
   initForm();
-  location.hash = "#/post/" + id;
+  location.hash = "#/post/" + saved.id;
+
+  if (saved.local === false) {
+    alert("✅ 已提交到网站 content/ 目录。GitHub Pages 部署约需 1 分钟，稍后所有人刷新即可看到。");
+  }
 }
 
 function handleExport() {

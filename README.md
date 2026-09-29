@@ -29,11 +29,14 @@ site/
 │     └─ marked.min.js     # 本地内置的 Markdown 解析器（无需联网）
 ├─ content/
 │  ├─ manifest.json        # 内容清单（所有文章的索引，作者编辑的"源"）
-│  ├─ posts.js             # 由脚本自动生成：内联所有正文，站点实际加载它
+│  ├─ posts.js             # 由脚本/接口自动生成：内联所有正文，站点实际加载它
 │  └─ *.md                 # 每篇文章一个 Markdown 文件（正文）
+├─ functions/
+│  └─ api/
+│     └─ submit.js         # Cloudflare Pages 函数：接收投稿并写入仓库 content/（多用户同步）
 └─ tools/
    ├─ add_post.py          # 一键新增文章 + 自动重新打包 posts.js
-   └─ merge_local.py       # 把网页「录入内容」导出的 JSON 合并进 content/
+   └─ merge_local.py       # 把网页「录入内容」导出的 JSON 合并进 content/（本地/无后端时）
 ```
 
 ---
@@ -70,49 +73,39 @@ python tools/add_post.py \
 
 > `--build` 仅重新打包数据、不新增文章，适合手动改过 `.md` 或 `manifest.json` 后同步。
 
-### 方法 C：网页内直接录入（最简单，但内容在浏览器本地）
+### 方法 C：网页内直接录入
 
 打开网站，点右上角 **「✎ 录入内容」**：选择主题 → 填标题、供稿人、摘要、正文 → **提交发布**。
-新文章立即出现在该主题的"最新"位置，可随时删除（仅限本机录入的）。
 
-> ⚠️ 重要：纯静态站点没有数据库，**录入内容只存在你当前这台浏览器的 localStorage 里**，
-> 不会写进 `content/`、也不会自动同步到 GitHub。所以：
-> - 换浏览器 / 换设备 / 其他人访问，都**看不到**这些录入内容；
-> - 上传 GitHub 后，`content/` 目录里并没有这些文章。
->
-> 想让录入内容**正式进 `content/` 且所有人可见**，请走下面的「合并发布」流程。
+- **部署在 Cloudflare Pages（已配置提交接口）**：点「提交发布」会**直接把文章写入仓库的 `content/` 目录**（生成 `.md`、更新 `manifest.json` 与 `posts.js`），**所有访问者刷新即可看到**，实现多用户同步。提交者本人即时可见，其他人约 1 分钟后（GitHub Pages 部署完成）可见。
+- **未配置接口（如 GitHub Pages 直传、或本机双击打开）**：内容暂存本浏览器 `localStorage`，仅自己可见。可用「⬇ 导出录入内容」下载 JSON，再走下面的「合并发布」流程正式入库。
 
-**合并发布（网页录入 → 进 content/ → 所有人可见）：**
+#### 合并发布（本地/无后端时，网页录入 → 进 content/ → 所有人可见）
 
 1. 在网站上点 **「⬇ 导出录入内容」**，下载一个 JSON 文件。
 2. 把该文件放到 `site/content/_drafts/local_entries.json`（或记住它的路径）。
 3. 在本机运行合并脚本：
 
 ```bash
-# 放到默认位置（content/_drafts/local_entries.json）时：
-python tools/merge_local.py
-# 或指定路径：
-python tools/merge_local.py 路径/录入内容导出.json
+python tools/merge_local.py            # 默认读取 content/_drafts/local_entries.json
+python tools/merge_local.py 路径/录入内容导出.json   # 或指定路径
 ```
 
-脚本会：① 为每篇生成 `content/<日期>-<slug>.md`；② 登记进 `manifest.json`；③ 自动重建 `posts.js`。
-已存在同名的文章会被跳过，不会重复。
+脚本会：① 为每篇生成 `content/<日期>-<slug>.md`；② 登记进 `manifest.json`；③ 自动重建 `posts.js`。同名文章自动跳过。
 
-4. 提交并推送（GitHub Pages 会在推送后自动更新，所有人刷新即见）：
+4. 提交并推送：
 
 ```bash
-git add .
-git commit -m "add: 合并网页录入内容"
-git push
+git add . && git commit -m "add: 合并网页录入内容" && git push
 ```
 
 5. 合并完成后，回到浏览器用 **「🗑 删除本文」** 清掉对应的本机草稿，避免页面上重复显示。
 
 ---
 
-## 四、发布到 GitHub Pages（本地构建 + 推送）
+## 四、发布到网站（GitHub Pages 或 Cloudflare Pages）
 
-本仓库按你的选择**在本地完成构建，再手动推送到 GitHub**。步骤：
+本仓库为纯静态站点，本地完成构建后推送到 GitHub。要支持**多用户录入并同步进 `content/`**，推荐使用 Cloudflare Pages（见下方方案 B）。
 
 ### 1. 初始化并提交（只需一次）
 
@@ -138,32 +131,51 @@ git push -u origin main
 
 > 若提示登录，使用有 `repo` 权限的 Personal Access Token 作为密码（GitHub 已不支持账户密码推送）。
 
-### 4. 开启 GitHub Pages
+### 4. 两种托管方式
+
+#### 方案 A：GitHub Pages（仅静态托管，无多用户投稿）
 
 进入仓库 **Settings → Pages**，Source 选择 **main 分支 / root 目录**，保存。
 稍等一两分钟，访问 `https://<你的用户名>.github.io/<仓库名>/` 即可。
+此方式下网页「提交发布」会**降级为本机草稿**（localStorage），多用户同步需走「合并发布」流程（见方法 C）。
+
+#### 方案 B：Cloudflare Pages（支持多用户录入、自动同步到 content/）✅ 推荐
+
+保留 GitHub 仓库，但改用 **Cloudflare Pages** 托管（仍是纯静态站点，附带一个极小的服务端函数）。
+
+1. 把仓库推送到 GitHub（同第 3 步）。
+2. 到 Cloudflare Pages 新建项目，**连接该 GitHub 仓库**；
+   - Build command：`（空）`
+   - Build output directory：`site`（即本目录）
+   - 框架预设：None / 其他
+3. 在项目 **Settings → Environment variables** 添加三个变量（**只在服务器端，不进代码**）：
+   - `GITHUB_TOKEN`：在 GitHub 生成的 **Fine-grained Personal Access Token**，权限仅勾选该仓库的 **Contents: Read and write**。
+   - `GITHUB_REPO`：`你的用户名/仓库名`
+   - `GITHUB_BRANCH`：`main`
+4. 保存后触发部署。部署完成后，站点路径 `/api/submit` 即可接收投稿。
+5. 在网页「✎ 录入内容」提交的文章会**直接写入仓库 `content/`**（生成 `.md` + 更新 `manifest.json` + 重建 `posts.js`），GitHub Pages 重新构建后**所有访问者刷新即见**。
+
+> 函数代码见 `functions/api/submit.js`。Token 始终留在 Cloudflare 环境变量中，前端代码与公开仓库都拿不到，因此多用户可安全投稿。
 
 ### 5. 日后每日更新
 
 **脚本 / 手动新增：**
 ```bash
 python tools/add_post.py --title "..." --category ... --summary "..."
-# 写完正文后（改 .md 文件），重新打包：
-python tools/add_post.py --build
-git add .
-git commit -m "add: 2026-09-30 xxx"
-git push
+python tools/add_post.py --build      # 写完正文后重新打包
+git add . && git commit -m "add: ..." && git push
 ```
 
-**网页录入的新内容：**
+**网页录入的新内容（方案 B / Cloudflare Pages）：**
+直接点「✎ 录入内容 → 提交发布」即可，自动进 `content/` 并同步给所有人；无需手动合并。
+（仍可在浏览器用「🗑 删除本文」清掉自己本机的临时显示副本。）
+
+**网页录入的新内容（方案 A / GitHub Pages 或无后端）：**
 ```bash
 # 1) 网站上「✎ 录入内容」→「⬇ 导出录入内容」下载 JSON，放到 content/_drafts/local_entries.json
 # 2) 合并进 content/ 并重建 posts.js：
 python tools/merge_local.py
-# 3) 提交推送（GitHub Pages 自动刷新）：
-git add .
-git commit -m "add: 合并网页录入内容"
-git push
+# 3) 提交推送：git add . && git commit -m "add: 合并网页录入内容" && git push
 # 4) 回浏览器用「🗑 删除本文」清掉对应本机草稿
 ```
 

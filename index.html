@@ -120,7 +120,10 @@
           <button type="button" class="ghost-btn" id="fExport">⬇ 导出录入内容</button>
           <button type="button" class="ghost-btn" id="fReset">清空表单</button>
         </div>
-        <p class="form-hint">提交后内容保存在本浏览器（localStorage），刷新不丢失；点「导出录入内容」可下载备份文件，发给我即可合并进正式文章库。</p>
+        <p class="form-hint">
+          若站点部署在 <b>Cloudflare Pages</b> 并配置了提交接口，点「提交发布」会直接写入网站 <code>content/</code> 目录，<b>所有人刷新即可看到</b>（约 1 分钟）。
+          未配置时则暂存本浏览器（localStorage），可用「导出录入内容」下载备份后再合并。
+        </p>
       </form>
     </section>
   </main>
