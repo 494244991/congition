@@ -1,0 +1,8 @@
+# Cloudflare Pages 配置（可选）
+# 大多数人用 Cloudflare 控制台（网页）部署即可，无需本文件。
+# 若想用命令行部署：先 `npm i -g wrangler` 并 `wrangler login`，再 `wrangler pages deploy .`
+# 注意：GITHUB_TOKEN 等密钥务必在控制台/用 `wrangler secret put` 设置，不要写进本文件或仓库。
+
+name = "zhiyuan-tongshi"
+pages_build_output_dir = "."
+compatibility_date = "2024-09-01"

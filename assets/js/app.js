@@ -135,7 +135,9 @@ async function renderReader(postId) {
   state.cur = { catId, index, list, id: postId };
 
   // 文章内容（已内联在 posts.js 的 body 字段，无需 fetch）
-  const md = post.body || "";
+  // 正文开头可能含 “# 标题”（manifest 中已单独渲染标题），去掉首行 H1 避免重复
+  let md = post.body || "";
+  md = md.replace(/^\s*#\s+.*\r?\n+/, "");
   const html = (window.marked && marked.parse) ? marked.parse(md) : `<pre>${esc(md)}</pre>`;
   const sub = post.subcategory ? ` · ${esc(post.subcategory)}` : "";
   const metaBits = [fmtDate(post.date), `约 ${readingMinutes(md)} 分钟阅读`];

@@ -141,21 +141,48 @@ git push -u origin main
 
 #### 方案 B：Cloudflare Pages（支持多用户录入、自动同步到 content/）✅ 推荐
 
-保留 GitHub 仓库，但改用 **Cloudflare Pages** 托管（仍是纯静态站点，附带一个极小的服务端函数）。
+保留 GitHub 仓库，但改用 **Cloudflare Pages** 托管（仍是纯静态站点，附带一个极小的服务端函数 `functions/api/submit.js`）。
+任何人点「✎ 录入内容 → 提交发布」，内容会**直接写入仓库 `content/`**，GitHub 重新构建后**所有访问者刷新即见**，真正实现多用户共享。
 
-1. 把仓库推送到 GitHub（同第 3 步）。
-2. 到 Cloudflare Pages 新建项目，**连接该 GitHub 仓库**；
-   - Build command：`（空）`
-   - Build output directory：`site`（即本目录）
-   - 框架预设：None / 其他
-3. 在项目 **Settings → Environment variables** 添加三个变量（**只在服务器端，不进代码**）：
-   - `GITHUB_TOKEN`：在 GitHub 生成的 **Fine-grained Personal Access Token**，权限仅勾选该仓库的 **Contents: Read and write**。
-   - `GITHUB_REPO`：`你的用户名/仓库名`
-   - `GITHUB_BRANCH`：`main`
-4. 保存后触发部署。部署完成后，站点路径 `/api/submit` 即可接收投稿。
-5. 在网页「✎ 录入内容」提交的文章会**直接写入仓库 `content/`**（生成 `.md` + 更新 `manifest.json` + 重建 `posts.js`），GitHub Pages 重新构建后**所有访问者刷新即见**。
+> 本仓库的 git 根目录就是站点根目录（`index.html` 在根），所以下方的 Build output directory 填 `.`。
+
+**第 1 步：推送仓库到 GitHub**（见上文第 3 步）。
+
+**第 2 步：生成一个有仓库写权限的 GitHub Token（Fine-grained）**
+1. 打开 https://github.com/settings/tokens?type=beta （Settings → Developer settings → Personal access tokens → Fine-grained tokens）
+2. 点 **Generate new token**，填写：
+   - Token name：随意，如 `cloudflare-submit`
+   - Expiration：按需（建议 1 年或更长，到期需重新生成）
+   - Resource owner：你的账号
+   - Repository access：**Only select repositories** → 选中本仓库
+   - Permissions → **Repository permissions → Contents** → 设为 **Read and write**
+3. 拉到底点 **Generate token**，**立即复制**那串 `github_pat_...`（只显示一次）。
+
+**第 3 步：在 Cloudflare 创建 Pages 项目并连接仓库**
+1. 打开 Cloudflare 控制台 → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**
+2. 授权并选中你的 GitHub 仓库
+3. 设置构建：
+   - Framework preset：**None**
+   - Build command：**（留空）**
+   - **Build output directory：`.`**（点开 “Override” 后填入点号，表示站点根目录）
+4. 点 **Save and Deploy**，等待首次部署完成（先不要管功能，能打开首页即可）。
+
+**第 4 步：配置三个环境变量（密钥只存在 Cloudflare 服务器端，不进代码）**
+在刚建好的 Pages 项目里：**Settings → Environment variables** → 添加以下变量（Production 环境）：
+- `GITHUB_TOKEN` = 第 2 步复制的 `github_pat_...`
+- `GITHUB_REPO` = `你的用户名/仓库名`（例如 `zhangsan/tongshi-site`）
+- `GITHUB_BRANCH` = `main`
+
+> 保存后 Cloudflare 会自动重新部署，使环境变量生效。
+
+**第 5 步：验证**
+1. 打开你的 Pages 地址 `https://<项目名>.pages.dev`
+2. 点右上角「✎ 录入内容」→ 选主题、填标题/正文 → **提交发布**
+3. 到 GitHub 仓库 `content/` 目录，应能看到新生成的 `.md` 文件，`manifest.json` 与 `posts.js` 也已更新
+4. 用手机/另一浏览器打开同一地址，**刷新即可看到刚才录入的内容**（Cloudflare 重新构建约需 1 分钟；必要时 `Ctrl+Shift+R` 硬刷新）
 
 > 函数代码见 `functions/api/submit.js`。Token 始终留在 Cloudflare 环境变量中，前端代码与公开仓库都拿不到，因此多用户可安全投稿。
+> 若未配置好 Token/环境变量，提交会**自动降级为本机草稿**（仅自己可见），不会报错——所以若发现还是只有本地可见，请先检查第 4 步三个变量是否填对。
 
 ### 5. 日后每日更新
 
