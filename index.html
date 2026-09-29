@@ -60,10 +60,35 @@
       </section>
     </section>
 
-    <!-- 文章详情视图 -->
+    <!-- 文章阅读 / 主题视图 -->
     <section id="view-post" class="view" hidden>
-      <button class="back-btn" id="backBtn">← 返回</button>
+      <div class="reader-bar">
+        <button class="back-btn" id="backBtn">← 返回首页</button>
+        <div class="reader-nav">
+          <button class="nav-btn" id="prevBtn">← 较新</button>
+          <span id="readerPos" class="reader-pos"></span>
+          <button class="nav-btn" id="nextBtn">较早 →</button>
+          <button class="nav-btn toggle-table" id="toggleTableBtn">☰ 目录</button>
+        </div>
+      </div>
+
       <article class="post" id="postArticle"><!-- JS 注入 --></article>
+
+      <section id="postTable" class="post-table" hidden>
+        <div class="section-head">
+          <h2 class="section-title" id="tableTitle">本主题目录</h2>
+          <span class="section-hint">点击标题即可阅读</span>
+        </div>
+        <div class="table-wrap">
+          <table class="topic-table">
+            <thead>
+              <tr><th>标题</th><th>供稿人</th><th>日期</th></tr>
+            </thead>
+            <tbody id="tableBody"><!-- JS 注入 --></tbody>
+          </table>
+        </div>
+      </section>
+
       <div class="post-foot">
         <button class="ghost-btn" id="randomBtn">🎲 随机一篇</button>
       </div>

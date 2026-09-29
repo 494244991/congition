@@ -131,5 +131,16 @@
     ],
     "file": "content/2026-09-21-misc-geography-cities-near-water.md",
     "author": "知元编辑部"
+  },
+  {
+    "id": "2026-09-29-ai-tech-moore-law",
+    "title": "摩尔定律",
+    "date": "2026-09-29",
+    "category": "ai-tech",
+    "subcategory": "",
+    "summary": "晶体管数量约每两年翻一番，科技是指数级迭代——红利属于主动拥抱变化的人。",
+    "tags": ["摩尔定律", "技术迭代", "指数增长"],
+    "file": "content/2026-09-29-ai-tech-moore-law.md",
+    "author": "alei"
   }
 ]
