@@ -26,6 +26,10 @@ const CONFIG = {
 const CAT_MAP = Object.fromEntries(CONFIG.categories.map(c => [c.id, c]));
 const ALL_CAT = { id: "all", label: "全部", color: "var(--accent)" };
 
+// 默认仓库（公开，仅用于读者端自动同步最新内容；写回仍需用户在「⚙ 设置」填 Token）
+const DEFAULT_REPO = "494244991/congition";
+const DEFAULT_BRANCH = "main";
+
 const LS_KEY = "zhiyuan_user_posts";   // 网页端录入的内容存这里
 const state = { posts: [], ready: false, cur: null };
 
@@ -57,6 +61,54 @@ function saveGhConfig(c) {
 // UTF-8 安全的 base64（GitHub Contents API 要求）
 function b64(str) { return btoa(unescape(encodeURIComponent(str))); }
 function fromB64(s) { return decodeURIComponent(escape(atob((s || "").replace(/\s+/g, "")))); }
+
+/* ---------- 读者端：自动同步最新内容（无需配置，走 jsDelivr 公开镜像） ---------- */
+// 读者只需知道仓库即可拉取最新 posts.js；Token 仅用于写回，不强制
+function readConfig() {
+  const c = loadGhConfig();
+  return { token: c.token || "", repo: c.repo || DEFAULT_REPO, branch: c.branch || DEFAULT_BRANCH };
+}
+function parsePostsJs(txt) {
+  const m = (txt || "").match(/window\.__POSTS__\s*=\s*(\[[\s\S]*\])\s*;/);
+  if (!m) return null;
+  try { const a = JSON.parse(m[1]); return Array.isArray(a) ? a : null; } catch { return null; }
+}
+// 从 jsDelivr（CORS 友好、无限流）拉取最新 posts.js；带分钟级缓存击穿参数，保证回源到最新
+async function fetchLivePosts() {
+  const cfg = readConfig();
+  if (!cfg.repo) return null;
+  const bust = Math.floor(Date.now() / 60000); // 每分钟变一次，强制回源
+  const url = `https://cdn.jsdelivr.net/gh/${cfg.repo}@${cfg.branch || "main"}/content/posts.js?_=${bust}`;
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null;
+    const txt = await res.text();
+    return parsePostsJs(txt);
+  } catch (e) { console.warn("live fetch failed:", e && e.message); return null; }
+}
+let __baseSig = "";
+function baseSignature(arr) { return (arr || []).map(p => p.id).sort().join("|"); }
+// 拉取并合并最新内容；force=true 时即便与本地一致也重绘（用于首次/手动刷新）
+async function refreshFromGitHub(force) {
+  const arr = await fetchLivePosts();
+  if (!arr || !Array.isArray(arr)) return false;
+  const sig = baseSignature(arr);
+  if (!force && sig === __baseSig) return false; // 无变化，不重绘、不跳滚动
+  __baseSig = sig;
+  window.__POSTS__ = arr;
+  refreshPosts();
+  const y = window.scrollY;
+  if (state.ready) router();
+  requestAnimationFrame(() => window.scrollTo(0, y));
+  updateLastUpdated();
+  return true;
+}
+function updateLastUpdated() {
+  const el = $("#syncInfo");
+  if (!el) return;
+  const t = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+  el.textContent = "已同步 " + t;
+}
 
 async function ghGet(path, cfg) {
   const url = `https://api.github.com/repos/${cfg.repo}/contents/${path}?ref=${cfg.branch || "main"}`;
@@ -385,7 +437,7 @@ async function handleFormSubmit(e) {
   location.hash = "#/post/" + savedId;
 
   if (mode === "cloudflare" || mode === "github") {
-    showBanner("✅ 已提交到网站 content/ 目录，GitHub Pages 重建约需 1 分钟，之后所有人刷新即可看到。", "ok");
+    showBanner("✅ 已提交到网站 content/ 目录，约 1 分钟内所有访客会自动刷新看到（无需手动刷新）。", "ok");
   } else {
     showBanner("💾 已保存到本机浏览器（仅自己可见）。点右上角「⚙ 设置」填入 GitHub Token，即可让所有人共享。", "warn");
   }
@@ -546,11 +598,20 @@ $("#setClear").addEventListener("click", () => {
   updateModeBadge();
   showBanner("已清除 GitHub 设置，投稿将仅存本机。", "warn");
 });
+$("#refreshBtn").addEventListener("click", async () => {
+  const btn = $("#refreshBtn");
+  const old = btn.textContent;
+  btn.disabled = true; btn.textContent = "🔄 同步中…";
+  const ok = await refreshFromGitHub(true);
+  btn.textContent = old; btn.disabled = false;
+  showBanner(ok ? "🔄 已同步最新内容。" : "⚠️ 同步失败，稍后自动重试。", ok ? "ok" : "warn");
+});
 
 /* ---------- 启动 ---------- */
 function init() {
   $("#year").textContent = new Date().getFullYear();
   refreshPosts();   // 内置文章(posts.js) + 本机录入(localStorage)
+  __baseSig = baseSignature(window.__POSTS__ || []);
   updateModeBadge();
   if (!state.posts.length) {
     showView("home");
@@ -561,5 +622,10 @@ function init() {
   initForm();
   window.addEventListener("hashchange", router);
   router();
+  // 读者端：打开即同步最新内容（jsDelivr 公开镜像，无需任何配置），并每 60 秒自动轮询
+  refreshFromGitHub(true).then(ok => { if (ok) updateModeBadge(); });
+  setInterval(() => {
+    if (document.visibilityState === "visible") refreshFromGitHub(false);
+  }, 60000);
 }
 document.addEventListener("DOMContentLoaded", init);
