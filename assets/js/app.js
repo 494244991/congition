@@ -45,6 +45,93 @@ function refreshPosts() {
   state.posts = base.concat(user);
 }
 
+/* ---------- 浏览器直连 GitHub（多人共享，无需后端） ---------- */
+const GH_CFG_KEY = "zhiyuan_gh_config";
+function loadGhConfig() {
+  try { return JSON.parse(localStorage.getItem(GH_CFG_KEY) || "{}"); } catch { return {}; }
+}
+function saveGhConfig(c) {
+  if (c && c.token && c.repo) localStorage.setItem(GH_CFG_KEY, JSON.stringify(c));
+  else localStorage.removeItem(GH_CFG_KEY);
+}
+// UTF-8 安全的 base64（GitHub Contents API 要求）
+function b64(str) { return btoa(unescape(encodeURIComponent(str))); }
+function fromB64(s) { return decodeURIComponent(escape(atob((s || "").replace(/\s+/g, "")))); }
+
+async function ghGet(path, cfg) {
+  const url = `https://api.github.com/repos/${cfg.repo}/contents/${path}?ref=${cfg.branch || "main"}`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${cfg.token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "zhiyuan",
+    },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error("GitHub GET " + path + ": " + res.status);
+  return res.json();
+}
+async function ghPut(path, content, message, cfg, sha) {
+  const url = `https://api.github.com/repos/${cfg.repo}/contents/${path}`;
+  const body = { message, content: b64(content), branch: cfg.branch || "main" };
+  if (sha) body.sha = sha;
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${cfg.token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "zhiyuan",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error("GitHub PUT " + path + ": " + res.status + " " + t.slice(0, 200));
+  }
+  return res.json();
+}
+// 把投稿直接写入仓库：.md + manifest.json + 重建 posts.js；标题重复抛 {status:409}
+async function submitToGitHub(payload, cfg) {
+  const mf = await ghGet("content/manifest.json", cfg);
+  let posts = mf ? JSON.parse(fromB64(mf.content)) : [];
+  if (!Array.isArray(posts)) posts = [];
+  if (posts.some((p) => (p.title || "").trim().toLowerCase() === payload.title.trim().toLowerCase()))
+    throw { status: 409, message: "该标题已存在，请勿重复提交" };
+
+  const ids = new Set(posts.map((p) => p.id));
+  let fid = payload.id, n = 2;
+  while (ids.has(fid)) fid = `${payload.date}-${slugFromTitle(payload.title)}-${n++}`;
+  const fname = `content/${fid}.md`;
+  const md = `# ${payload.title}\n\n${payload.body}\n`;
+  await ghPut(fname, md, `add: ${payload.title}`, cfg, null);
+
+  posts.push({
+    id: fid, title: payload.title, date: payload.date, category: payload.category,
+    subcategory: payload.subcategory || "", summary: payload.summary,
+    tags: payload.tags || [], file: fname, author: payload.author,
+  });
+  await ghPut("content/manifest.json", JSON.stringify(posts, null, 2),
+    `manifest: +${payload.title}`, cfg, mf ? mf.sha : null);
+
+  // 重建 posts.js（内联所有正文），让站点立即生效
+  try {
+    const arr = [];
+    for (const p of posts) {
+      const f = await ghGet(p.file, cfg);
+      arr.push({ ...p, body: f ? fromB64(f.content) : "" });
+    }
+    const postsJs = "window.__POSTS__ = " + JSON.stringify(arr, null, 1) + ";\n";
+    const pjs = await ghGet("content/posts.js", cfg);
+    await ghPut("content/posts.js", postsJs, `rebuild posts.js: +${payload.title}`, cfg, pjs ? pjs.sha : null);
+  } catch (e) {
+    console.warn("rebuild posts.js failed:", e && e.message);
+  }
+  return fid;
+}
+
 /* ---------- 工具 ---------- */
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s = "") => s.replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
@@ -237,8 +324,11 @@ async function handleFormSubmit(e) {
 
   const payload = { id: proposedId, title, date, category, subcategory, summary, tags, author, body };
 
-  // 优先提交到服务端（Cloudflare Pages /api/submit）：写入仓库 content/，所有人可见
-  let saved = null;
+  // 提交通道：① Cloudflare 服务端 /api/submit → ② 浏览器直连 GitHub → ③ 本机草稿
+  let mode = null;     // "cloudflare" | "github" | "local"
+  let savedId = proposedId;
+
+  // ① Cloudflare（部署了 functions/api/submit 才有效）
   try {
     const r = await fetch("/api/submit", {
       method: "POST",
@@ -251,27 +341,40 @@ async function handleFormSubmit(e) {
       return;
     }
     if (r.ok) {
-      const j = await r.json();
-      saved = { ...payload, id: (j && j.id) || proposedId, local: false };
-    } else {
       const j = await r.json().catch(() => ({}));
-      if (j.error) console.warn("服务端提交失败：", j.error);
+      savedId = (j && j.id) || proposedId;
+      mode = "cloudflare";
     }
-  } catch (err) {
-    // 本地 / 未部署函数（如 GitHub Pages 或双击打开）：走本机草稿兜底
+  } catch (_) { /* 未部署 Cloudflare：继续尝试下一通道 */ }
+
+  // ② 浏览器直连 GitHub（在「⚙ 设置」里填过 Token）
+  if (!mode) {
+    const cfg = loadGhConfig();
+    if (cfg && cfg.token && cfg.repo) {
+      try {
+        savedId = await submitToGitHub(payload, cfg);
+        mode = "github";
+      } catch (err) {
+        if (err && err.status === 409) { alert(err.message || "该标题已存在，请勿重复提交。"); return; }
+        console.warn("GitHub 直连提交失败：", err && err.message);
+        // 失败则退到本机草稿
+      }
+    }
   }
 
-  // 未走服务端时，存为本机 localStorage 草稿（仅自己可见，可后续合并）
-  if (!saved) {
+  // ③ 本机草稿（仅自己可见）
+  if (!mode) {
     const exist = new Set(state.posts.map(p => p.id));
     let id = proposedId, n = 2;
     while (exist.has(id)) id = `${date}-${slug}-${n++}`;
-    saved = { ...payload, id, local: true };
+    savedId = id;
+    mode = "local";
   }
 
-  // 始终在本地留一份，保证提交者本人即时看到
+  // 本地留一份镜像，保证提交者本人即时看到；服务端文章标记 local:false 避免与 posts.js 重复
+  const saved = { ...payload, id: savedId, local: mode !== "local" ? false : true };
   const userPosts = loadUserPosts();
-  const idx = userPosts.findIndex(p => p.id === saved.id);
+  const idx = userPosts.findIndex(p => p.id === savedId);
   if (idx >= 0) userPosts[idx] = saved; else userPosts.push(saved);
   saveUserPosts(userPosts);
   refreshPosts();
@@ -279,11 +382,14 @@ async function handleFormSubmit(e) {
   $("#newForm").reset();
   $("#fAuthor").value = "知元编辑部";
   initForm();
-  location.hash = "#/post/" + saved.id;
+  location.hash = "#/post/" + savedId;
 
-  if (saved.local === false) {
-    alert("✅ 已提交到网站 content/ 目录。GitHub Pages 部署约需 1 分钟，稍后所有人刷新即可看到。");
+  if (mode === "cloudflare" || mode === "github") {
+    showBanner("✅ 已提交到网站 content/ 目录，GitHub Pages 重建约需 1 分钟，之后所有人刷新即可看到。", "ok");
+  } else {
+    showBanner("💾 已保存到本机浏览器（仅自己可见）。点右上角「⚙ 设置」填入 GitHub Token，即可让所有人共享。", "warn");
   }
+  updateModeBadge();
 }
 
 function handleExport() {
@@ -295,6 +401,62 @@ function handleExport() {
   a.download = "录入内容导出.json";
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+/* ---------- 提交状态提示 ---------- */
+function showBanner(msg, kind) {
+  const b = $("#submitBanner");
+  if (!b) return;
+  b.textContent = msg;
+  b.className = "submit-banner " + (kind === "ok" ? "ok" : "warn");
+  b.hidden = false;
+  clearTimeout(window.__bn);
+  window.__bn = setTimeout(() => { b.hidden = true; }, 9000);
+}
+
+/* ---------- 共享模式徽标 ---------- */
+function updateModeBadge() {
+  const b = $("#modeBadge");
+  if (!b) return;
+  const c = loadGhConfig();
+  if (c && c.token && c.repo) {
+    b.textContent = "● 共享已开启（GitHub）";
+    b.className = "mode-badge on";
+  } else {
+    b.textContent = "○ 本机模式（⚙ 设置开启共享）";
+    b.className = "mode-badge off";
+  }
+}
+
+/* ---------- 设置面板（浏览器直连 GitHub） ---------- */
+function openSettings() {
+  const c = loadGhConfig();
+  $("#setToken").value = c.token || "";
+  $("#setRepo").value = c.repo || "";
+  $("#setBranch").value = c.branch || "main";
+  $("#setStatus").textContent = "";
+  $("#settingsModal").hidden = false;
+}
+function closeSettings() { $("#settingsModal").hidden = true; }
+async function testGhConnection() {
+  const c = {
+    token: $("#setToken").value.trim(),
+    repo: $("#setRepo").value.trim(),
+    branch: $("#setBranch").value.trim() || "main",
+  };
+  const st = $("#setStatus");
+  if (!c.token || !c.repo) { st.textContent = "❌ 请先填写 Token 和仓库名"; st.className = "modal-status warn"; return; }
+  st.textContent = "测试中…"; st.className = "modal-status";
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${c.repo}/contents/content/manifest.json?ref=${c.branch}`,
+      { headers: { Authorization: `Bearer ${c.token}`, Accept: "application/vnd.github+json" } }
+    );
+    if (r.ok) { st.textContent = "✅ 连接成功，可写入。"; st.className = "modal-status ok"; }
+    else st.textContent = `❌ 失败：${r.status}（检查 Token 权限或仓库名/分支）`;
+  } catch (err) {
+    st.textContent = "❌ 网络错误：" + (err && err.message);
+  }
 }
 
 /* ---------- 路由 ---------- */
@@ -363,10 +525,33 @@ $("#fReset").addEventListener("click", () => {
   initForm();
 });
 
+/* ---------- 设置面板绑定 ---------- */
+$("#settingsBtn").addEventListener("click", openSettings);
+$("#settingsClose").addEventListener("click", closeSettings);
+$("#settingsMask").addEventListener("click", closeSettings);
+$("#setSave").addEventListener("click", () => {
+  saveGhConfig({
+    token: $("#setToken").value.trim(),
+    repo: $("#setRepo").value.trim(),
+    branch: $("#setBranch").value.trim() || "main",
+  });
+  closeSettings();
+  updateModeBadge();
+  showBanner("✅ 设置已保存。现在投稿会直接写入 GitHub 仓库，所有人可见。", "ok");
+});
+$("#setTest").addEventListener("click", testGhConnection);
+$("#setClear").addEventListener("click", () => {
+  saveGhConfig({});
+  closeSettings();
+  updateModeBadge();
+  showBanner("已清除 GitHub 设置，投稿将仅存本机。", "warn");
+});
+
 /* ---------- 启动 ---------- */
 function init() {
   $("#year").textContent = new Date().getFullYear();
   refreshPosts();   // 内置文章(posts.js) + 本机录入(localStorage)
+  updateModeBadge();
   if (!state.posts.length) {
     showView("home");
     $("#featured").innerHTML = "";

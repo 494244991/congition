@@ -77,8 +77,12 @@ python tools/add_post.py \
 
 打开网站，点右上角 **「✎ 录入内容」**：选择主题 → 填标题、供稿人、摘要、正文 → **提交发布**。
 
-- **部署在 Cloudflare Pages（已配置提交接口）**：点「提交发布」会**直接把文章写入仓库的 `content/` 目录**（生成 `.md`、更新 `manifest.json` 与 `posts.js`），**所有访问者刷新即可看到**，实现多用户同步。提交者本人即时可见，其他人约 1 分钟后（GitHub Pages 部署完成）可见。
-- **未配置接口（如 GitHub Pages 直传、或本机双击打开）**：内容暂存本浏览器 `localStorage`，仅自己可见。可用「⬇ 导出录入内容」下载 JSON，再走下面的「合并发布」流程正式入库。
+提交后会自动选择以下通道之一（无需你手动操作）：
+1. **Cloudflare 服务端**（若已部署方案 B）：写入仓库 `content/`，所有人可见。
+2. **浏览器直连 GitHub**（若在「⚙ 设置」里填过 Token，见方案 C）：直接调用 GitHub API 写入仓库 `content/`，**所有人刷新即见**——这是让现有 GitHub Pages 也能多人共享的最简方式。
+3. **本机草稿**（以上都未配置）：内容暂存本浏览器 `localStorage`，仅自己可见。可用「⬇ 导出录入内容」下载 JSON，再走下面的「合并发布」流程正式入库。
+
+右上角徽标会实时显示当前模式：「● 共享已开启（GitHub）」或「○ 本机模式」。
 
 #### 合并发布（本地/无后端时，网页录入 → 进 content/ → 所有人可见）
 
@@ -105,7 +109,10 @@ git add . && git commit -m "add: 合并网页录入内容" && git push
 
 ## 四、发布到网站（GitHub Pages 或 Cloudflare Pages）
 
-本仓库为纯静态站点，本地完成构建后推送到 GitHub。要支持**多用户录入并同步进 `content/`**，推荐使用 Cloudflare Pages（见下方方案 B）。
+本仓库为纯静态站点，本地完成构建后推送到 GitHub。要支持**多用户录入并同步进 `content/`**，有两种零后端方案可选：
+
+- **方案 C：浏览器直连 GitHub（最省事）** —— 站点部署在 GitHub Pages 即可，**无需迁移托管、无需 Cloudflare**。你（或任何投稿人）在网页「⚙ 设置」里填入一个有仓库写权限的 Token，点「提交发布」就直接写入仓库 `content/`，所有人刷新即见。
+- **方案 B：Cloudflare Pages（最安全）** —— Token 只存在服务器端环境变量，前端零密钥，适合对安全性要求高的场景。
 
 ### 1. 初始化并提交（只需一次）
 
@@ -133,11 +140,13 @@ git push -u origin main
 
 ### 4. 两种托管方式
 
-#### 方案 A：GitHub Pages（仅静态托管，无多用户投稿）
+#### 方案 A：GitHub Pages（基础静态托管，可配合「⚙ 设置」实现多人共享）
 
 进入仓库 **Settings → Pages**，Source 选择 **main 分支 / root 目录**，保存。
 稍等一两分钟，访问 `https://<你的用户名>.github.io/<仓库名>/` 即可。
-此方式下网页「提交发布」会**降级为本机草稿**（localStorage），多用户同步需走「合并发布」流程（见方法 C）。
+
+- **默认**：网页「提交发布」会**降级为本机草稿**（localStorage），仅自己可见。
+- **开启多人共享（推荐）**：在网页右上角点「⚙ 设置」，填入一个有本仓库 `Contents: Read and write` 权限的 GitHub Token（见方案 C 第 2 步），保存后，任何人点「提交发布」都会**直接写入仓库 `content/`**，其他人约 1 分钟后刷新即见。**无需迁移到 Cloudflare**。
 
 #### 方案 B：Cloudflare Pages（支持多用户录入、自动同步到 content/）✅ 推荐
 
@@ -183,6 +192,38 @@ git push -u origin main
 
 > 函数代码见 `functions/api/submit.js`。Token 始终留在 Cloudflare 环境变量中，前端代码与公开仓库都拿不到，因此多用户可安全投稿。
 > 若未配置好 Token/环境变量，提交会**自动降级为本机草稿**（仅自己可见），不会报错——所以若发现还是只有本地可见，请先检查第 4 步三个变量是否填对。
+
+#### 方案 C：浏览器直连 GitHub（最省事，GitHub Pages 也能多人共享）✅ 推荐
+
+**无需 Cloudflare、无需迁移托管**。站点仍部署在 GitHub Pages，但网页「⚙ 设置」里填入 Token 后，提交会**由浏览器直接调用 GitHub API 写入仓库 `content/`**，所有人刷新即见。适合不想折腾服务端、想尽快让同学一起投稿的场景。
+
+> 安全说明：此方案的 Token 保存在**投稿人各自的浏览器**（localStorage），不进代码、不进仓库，因此相对安全；但 Token 具有该仓库 `contents:write` 权限，**任何能打开浏览器开发者工具的人理论上都能读到**。建议用「只对该仓库授权、仅 Contents 读写」的 Fine-grained Token，并在 `contents` 之外不加其它权限，把风险降到最低。若对安全性要求高，请用方案 B（Cloudflare）。
+
+**第 1 步：生成 Fine-grained Token（只对该仓库授权）**
+1. 打开 https://github.com/settings/tokens?type=beta
+2. **Generate new token**，填写：
+   - Token name：如 `zhiyuan-submit`
+   - Repository access：**Only select repositories** → 选中本仓库
+   - Permissions → **Repository permissions → Contents** → **Read and write**
+3. 复制那串 `github_pat_...`（只显示一次）。
+
+**第 2 步：在网站「⚙ 设置」里填入**
+1. 打开你的站点（GitHub Pages 地址）。
+2. 点右上角 **「⚙ 设置」**，填入：
+   - **GitHub Token**：第 1 步复制的 `github_pat_...`
+   - **仓库**：`你的用户名/仓库名`（如 `zhangsan/tongshi-site`）
+   - **分支**：`main`
+3. 点「**测试连接**」确认显示「✅ 连接成功」，再点「保存」。
+4. （可选）把这组配置告诉想一起投稿的同学，他们填入自己的浏览器即可。
+
+**第 3 步：投稿并验证**
+1. 点「✎ 录入内容」→ 选主题、填标题/正文 → **提交发布**。
+2. 顶部出现「✅ 已提交到网站 content/ 目录…」即成功；Header 右侧徽标会显示「● 共享已开启（GitHub）」。
+3. 到 GitHub 仓库 `content/`，应能看到新 `.md`、`manifest.json` 与 `posts.js` 已更新。
+4. 用另一浏览器/手机打开同一地址，**刷新即可看到**（GitHub Pages 重建约 1 分钟；必要时 `Ctrl+Shift+R`）。
+
+> 若提交后只在本机看到、仓库 `content/` 没有新文件：多半是 Token 权限不足或仓库名/分支填错，点「测试连接」排查即可。
+
 
 ### 5. 日后每日更新
 
