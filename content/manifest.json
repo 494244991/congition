@@ -159,5 +159,18 @@
     ],
     "file": "content/2026-09-29-ABC管理法.md",
     "author": "alei"
+  },
+  {
+    "id": "2026-09-29-马太效应",
+    "title": "马太效应",
+    "date": "2026-09-29",
+    "category": "management",
+    "subcategory": "",
+    "summary": "马太效应",
+    "tags": [
+      "马太效应"
+    ],
+    "file": "content/2026-09-29-马太效应.md",
+    "author": "alei"
   }
 ]
