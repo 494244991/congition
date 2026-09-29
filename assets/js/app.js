@@ -25,7 +25,7 @@ const CONFIG = {
 const CAT_MAP = Object.fromEntries(CONFIG.categories.map(c => [c.id, c]));
 const ALL_CAT = { id: "all", label: "全部", color: "var(--accent)" };
 
-const state = { posts: [], ready: false, cache: {}, cur: null };
+const state = { posts: [], ready: false, cur: null };
 
 /* ---------- 工具 ---------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -40,24 +40,6 @@ function readingMinutes(t = "") {
 function postsOf(catId) {
   const list = catId === "all" ? state.posts : state.posts.filter(p => p.category === catId);
   return list.slice().sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-}
-
-/* ---------- 数据加载 ---------- */
-async function loadManifest() {
-  const res = await fetch("content/manifest.json", { cache: "no-cache" });
-  if (!res.ok) throw new Error("manifest " + res.status);
-  let data = await res.json();
-  if (!Array.isArray(data)) data = data.posts || [];
-  state.posts = data;
-  state.ready = true;
-}
-async function loadMarkdown(file) {
-  if (state.cache[file]) return state.cache[file];
-  const res = await fetch(file, { cache: "no-cache" });
-  if (!res.ok) throw new Error("file " + file + " " + res.status);
-  const t = await res.text();
-  state.cache[file] = t;
-  return t;
 }
 
 /* ---------- 分类导航 ---------- */
@@ -132,13 +114,8 @@ async function renderReader(postId) {
   const index = Math.max(0, list.findIndex(p => p.id === postId));
   state.cur = { catId, index, list, id: postId };
 
-  // 文章内容
-  let md;
-  try { md = await loadMarkdown(post.file); }
-  catch (e) {
-    $("#postArticle").innerHTML = `<p class="post-meta">无法加载文章内容（${esc(e.message)}）。若是本地双击打开，请用本地服务器，见 README。</p>`;
-    return;
-  }
+  // 文章内容（已内联在 posts.js 的 body 字段，无需 fetch）
+  const md = post.body || "";
   const html = (window.marked && marked.parse) ? marked.parse(md) : `<pre>${esc(md)}</pre>`;
   const sub = post.subcategory ? ` · ${esc(post.subcategory)}` : "";
   const metaBits = [fmtDate(post.date), `约 ${readingMinutes(md)} 分钟阅读`];
@@ -247,17 +224,19 @@ $("#randomBtn").addEventListener("click", () => {
 $("#toggleTableBtn").addEventListener("click", () => showTable($("#postTable").hidden));
 
 /* ---------- 启动 ---------- */
-async function init() {
+function init() {
   $("#year").textContent = new Date().getFullYear();
-  try { await loadManifest(); }
-  catch (e) {
+  // 数据来自 content/posts.js（<script> 注入的 window.__POSTS__），无需 fetch，
+  // 因此双击打开 / 本地服务器 / GitHub Pages 三种方式都能正常加载。
+  const data = window.__POSTS__;
+  if (!Array.isArray(data) || !data.length) {
     showView("home");
     $("#featured").innerHTML = "";
-    $("#postList").innerHTML = `<p class="empty-state">无法加载内容清单（${esc(e.message)}）。<br>
-      若你是直接双击打开本文件，浏览器会拦截本地读取。请在本文件夹运行 <code>python -m http.server 8000</code><br>
-      然后访问 <code>http://localhost:8000</code> 。详见 README.md。</p>`;
+    $("#postList").innerHTML = `<p class="empty-state">还没有任何内容。请在 <code>content/</code> 新增文章并运行 <code>python tools/add_post.py --build</code> 生成 posts.js。</p>`;
     return;
   }
+  state.posts = data;
+  state.ready = true;
   window.addEventListener("hashchange", router);
   router();
 }

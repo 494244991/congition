@@ -8,15 +8,12 @@
 
 ## 一、本地预览
 
-由于浏览器会拦截 `file://` 方式直接读取内容文件，请用一个简单的本地服务器打开：
+本站所有内容已打包进 `content/posts.js`，通过 `<script>` 直接加载，**无需服务器、无需联网**：
 
-```bash
-cd site
-python -m http.server 8000
-# 然后浏览器访问 http://localhost:8000
-```
+- **最简单**：直接双击 `index.html` 即可打开浏览（适合日常预览）。
+- 若习惯用服务器：`cd site && python -m http.server 8000`，访问 `http://localhost:8000`。
 
-> 也可使用任意静态服务器，例如 `npx serve`（Node 环境）。
+> 注意：改动文章后，需重新生成 `posts.js`（见第三节），刷新页面即可看到更新。
 
 ---
 
@@ -31,10 +28,11 @@ site/
 │     ├─ app.js            # 前端逻辑：路由、分类、搜索、Markdown 渲染
 │     └─ marked.min.js     # 本地内置的 Markdown 解析器（无需联网）
 ├─ content/
-│  ├─ manifest.json        # 内容清单（所有文章的索引）
-│  └─ *.md                 # 每篇文章一个 Markdown 文件
+│  ├─ manifest.json        # 内容清单（所有文章的索引，作者编辑的"源"）
+│  ├─ posts.js             # 由脚本自动生成：内联所有正文，站点实际加载它
+│  └─ *.md                 # 每篇文章一个 Markdown 文件（正文）
 └─ tools/
-   └─ add_post.py          # 一键新增文章的辅助脚本
+   └─ add_post.py          # 一键新增文章 + 自动重新打包 posts.js
 ```
 
 ---
@@ -57,30 +55,19 @@ python tools/add_post.py \
   --summary "苦难叙事下的生命韧性"
 ```
 
-脚本会：① 在 `content/` 生成 `<日期>-<标题>.md` 文件（含写作模板）；② 自动把文章登记进 `manifest.json`。
-然后你只需打开生成的 `.md`，把模板占位内容换成正文即可（支持 Markdown）。
+脚本会：① 在 `content/` 生成 `<日期>-<标题>.md` 文件（含写作模板）；② 自动把文章登记进 `manifest.json`；③ **自动重新生成 `content/posts.js`**（这一步让站点立即生效）。
+然后你只需打开生成的 `.md`，把模板占位内容换成正文即可（支持 Markdown）。改完正文后，再跑一次 `python tools/add_post.py --build` 即可把新正文打包进 `posts.js`。
 
 ### 方法 B：手动
 
 1. 在 `content/` 新建一个 `.md` 文件，例如 `2026-09-30-my-topic.md`，写入正文（第一行用 `# 标题`）。
-2. 在 `content/manifest.json` 的数组里追加一条：
-
-```json
-{
-  "id": "2026-09-30-my-topic",
-  "title": "文章标题",
-  "date": "2026-09-30",
-  "category": "philosophy",
-  "subcategory": "",
-  "summary": "一句话摘要，显示在卡片上",
-  "tags": ["标签1", "标签2"],
-  "file": "content/2026-09-30-my-topic.md",
-  "author": "知元编辑部"
-}
-```
+2. 在 `content/manifest.json` 的数组里追加一条（字段同方法 A）。
+3. **务必运行** `python tools/add_post.py --build` 重新生成 `posts.js`，否则改动不会生效。
 
 `category` 取值：`management` / `philosophy` / `psychology` / `sociology` / `communication` / `ai-tech` / `misc`。
 `misc` 的子分类（`subcategory`）可取：时事政治、媒体、文化、文学、艺术、地理、旅游。
+
+> `--build` 仅重新打包数据、不新增文章，适合手动改过 `.md` 或 `manifest.json` 后同步。
 
 ---
 
@@ -121,6 +108,8 @@ git push -u origin main
 
 ```bash
 python tools/add_post.py --title "..." --category ... --summary "..."
+# 写完正文后（改 .md 文件），重新打包：
+python tools/add_post.py --build
 git add .
 git commit -m "add: 2026-09-30 xxx"
 git push

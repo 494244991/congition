@@ -32,6 +32,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONTENT_DIR = os.path.join(ROOT, "content")
 MANIFEST = os.path.join(CONTENT_DIR, "manifest.json")
+BUNDLE = os.path.join(CONTENT_DIR, "posts.js")
 
 CATEGORIES = ["management", "philosophy", "psychology",
               "sociology", "communication", "ai-tech", "misc"]
@@ -46,17 +47,53 @@ def slugify(title):
     return s[:60]
 
 
+def rebuild_bundle():
+    """把 manifest.json 与各 .md 正文合并，生成 content/posts.js（window.__POSTS__）。
+    站点直接通过 <script> 加载它，无需服务器、无需 fetch，file:// 双击也能用。"""
+    if not os.path.exists(MANIFEST):
+        print("⚠️ 找不到 manifest.json，无法打包。")
+        return
+    with open(MANIFEST, encoding="utf-8") as f:
+        posts = json.load(f)
+    if not isinstance(posts, list):
+        posts = posts.get("posts", [])
+    for p in posts:
+        fpath = os.path.join(ROOT, p.get("file", ""))
+        try:
+            with open(fpath, encoding="utf-8") as fh:
+                p["body"] = fh.read()
+        except OSError:
+            p["body"] = ""
+    with open(BUNDLE, "w", encoding="utf-8") as f:
+        f.write("window.__POSTS__ = ")
+        json.dump(posts, f, ensure_ascii=False, indent=1)
+        f.write(";\n")
+    print(f"✅ 已生成 content/posts.js（共 {len(posts)} 篇，正文已内联）")
+
+
 def main():
     ap = argparse.ArgumentParser(description="新增一篇主题内容")
-    ap.add_argument("--title", required=True)
-    ap.add_argument("--category", required=True, choices=CATEGORIES)
+    ap.add_argument("--title", required=False, default="")
+    ap.add_argument("--category", required=False, default="", choices=CATEGORIES)
     ap.add_argument("--subcategory", default="")
-    ap.add_argument("--summary", required=True)
+    ap.add_argument("--summary", required=False, default="")
     ap.add_argument("--date", default=datetime.date.today().isoformat())
     ap.add_argument("--author", default="知元编辑部")
     ap.add_argument("--tags", default="")
     ap.add_argument("--slug", default="")
+    ap.add_argument("--build", action="store_true",
+                    help="仅重新打包 content/posts.js（不新增文章），"
+                         "用于手动改过 .md 或 manifest 后同步。")
     args = ap.parse_args()
+
+    if args.build:
+        rebuild_bundle()
+        return
+
+    if not args.title or not args.category or not args.summary:
+        print("❌ 新增文章需要 --title、--category、--summary 三个参数。")
+        print("   仅重新打包数据请使用 --build。")
+        sys.exit(1)
 
     if args.category == "misc" and args.subcategory and args.subcategory not in MISC_SUBS:
         print(f"提示：misc 子分类建议取自 {MISC_SUBS}，已按你输入保留。")
@@ -113,7 +150,11 @@ def main():
     with open(MANIFEST, "w", encoding="utf-8") as f:
         json.dump(posts, f, ensure_ascii=False, indent=2)
     print(f"✅ 已登记到 content/manifest.json（当前共 {len(posts)} 篇）")
-    print(f"\n下一步：编辑 {os.path.relpath(fpath, ROOT)} 写入正文，然后提交并推送到 GitHub。")
+
+    # 同步打包（让站点立即可用，无需服务器）
+    rebuild_bundle()
+    print(f"\n下一步：编辑 {os.path.relpath(fpath, ROOT)} 写入正文，"
+          f"然后提交并推送到 GitHub（或直接双击 index.html 预览）。")
 
 
 if __name__ == "__main__":
