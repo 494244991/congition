@@ -16,6 +16,8 @@
 }
 
 * { box-sizing: border-box; }
+/* 确保 hidden 属性始终生效（覆盖 .modal 等 display 规则） */
+[hidden] { display: none !important; }
 html { scroll-behavior: smooth; }
 body {
   margin: 0;
