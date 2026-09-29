@@ -32,7 +32,8 @@ site/
 │  ├─ posts.js             # 由脚本自动生成：内联所有正文，站点实际加载它
 │  └─ *.md                 # 每篇文章一个 Markdown 文件（正文）
 └─ tools/
-   └─ add_post.py          # 一键新增文章 + 自动重新打包 posts.js
+   ├─ add_post.py          # 一键新增文章 + 自动重新打包 posts.js
+   └─ merge_local.py       # 把网页「录入内容」导出的 JSON 合并进 content/
 ```
 
 ---
@@ -69,13 +70,43 @@ python tools/add_post.py \
 
 > `--build` 仅重新打包数据、不新增文章，适合手动改过 `.md` 或 `manifest.json` 后同步。
 
-### 方法 C：网页内直接录入（最简单）
+### 方法 C：网页内直接录入（最简单，但内容在浏览器本地）
 
 打开网站，点右上角 **「✎ 录入内容」**：选择主题 → 填标题、供稿人、摘要、正文 → **提交发布**。
 新文章立即出现在该主题的"最新"位置，可随时删除（仅限本机录入的）。
 
-- 录入内容保存在**当前浏览器**（localStorage），刷新/重启不丢失；换浏览器或换设备不会同步。
-- 点 **「⬇ 导出录入内容」** 可下载 JSON 备份；把该文件发给维护者即可合并进正式文章库。
+> ⚠️ 重要：纯静态站点没有数据库，**录入内容只存在你当前这台浏览器的 localStorage 里**，
+> 不会写进 `content/`、也不会自动同步到 GitHub。所以：
+> - 换浏览器 / 换设备 / 其他人访问，都**看不到**这些录入内容；
+> - 上传 GitHub 后，`content/` 目录里并没有这些文章。
+>
+> 想让录入内容**正式进 `content/` 且所有人可见**，请走下面的「合并发布」流程。
+
+**合并发布（网页录入 → 进 content/ → 所有人可见）：**
+
+1. 在网站上点 **「⬇ 导出录入内容」**，下载一个 JSON 文件。
+2. 把该文件放到 `site/content/_drafts/local_entries.json`（或记住它的路径）。
+3. 在本机运行合并脚本：
+
+```bash
+# 放到默认位置（content/_drafts/local_entries.json）时：
+python tools/merge_local.py
+# 或指定路径：
+python tools/merge_local.py 路径/录入内容导出.json
+```
+
+脚本会：① 为每篇生成 `content/<日期>-<slug>.md`；② 登记进 `manifest.json`；③ 自动重建 `posts.js`。
+已存在同名的文章会被跳过，不会重复。
+
+4. 提交并推送（GitHub Pages 会在推送后自动更新，所有人刷新即见）：
+
+```bash
+git add .
+git commit -m "add: 合并网页录入内容"
+git push
+```
+
+5. 合并完成后，回到浏览器用 **「🗑 删除本文」** 清掉对应的本机草稿，避免页面上重复显示。
 
 ---
 
@@ -114,6 +145,7 @@ git push -u origin main
 
 ### 5. 日后每日更新
 
+**脚本 / 手动新增：**
 ```bash
 python tools/add_post.py --title "..." --category ... --summary "..."
 # 写完正文后（改 .md 文件），重新打包：
@@ -121,6 +153,18 @@ python tools/add_post.py --build
 git add .
 git commit -m "add: 2026-09-30 xxx"
 git push
+```
+
+**网页录入的新内容：**
+```bash
+# 1) 网站上「✎ 录入内容」→「⬇ 导出录入内容」下载 JSON，放到 content/_drafts/local_entries.json
+# 2) 合并进 content/ 并重建 posts.js：
+python tools/merge_local.py
+# 3) 提交推送（GitHub Pages 自动刷新）：
+git add .
+git commit -m "add: 合并网页录入内容"
+git push
+# 4) 回浏览器用「🗑 删除本文」清掉对应本机草稿
 ```
 
 ---
