@@ -1,0 +1,15 @@
+# 系统/编辑器
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# 日志
+*.log
+
+# Python
+__pycache__/
+*.pyc
+
+# 本地预览产生的临时文件
+.http.server.pid

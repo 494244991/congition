@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>知元 · 通识学社</title>
+  <meta name="description" content="面向大学生的通识阅读站点，涵盖管理与经济、哲学与逻辑、心理学、社会学、口才与交际、AI与科技与杂谈，每日更新一篇，拓宽视野、提升认知。" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+  <!-- 顶部 -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="#/" aria-label="首页">
+        <span class="brand-mark">知</span>
+        <span class="brand-text">
+          <span class="brand-title">知元 · 通识学社</span>
+          <span class="brand-sub">拓宽视野 · 提升认知</span>
+        </span>
+      </a>
+      <div class="header-search">
+        <input id="searchInput" type="search" placeholder="搜索主题、关键词…" aria-label="搜索" />
+      </div>
+    </div>
+  </header>
+
+  <!-- 分类导航 -->
+  <nav class="cat-nav" id="catNav" aria-label="主题分类">
+    <div class="container cat-nav-inner" id="catNavInner"><!-- JS 注入 --></div>
+  </nav>
+
+  <!-- 主区域 -->
+  <main class="container main" id="main">
+    <!-- 首页视图 -->
+    <section id="view-home" class="view">
+      <section class="hero">
+        <h1 class="hero-title">每天读懂一个世界</h1>
+        <p class="hero-desc">
+          这里为大学生而建：管理、哲学、心理、社会、表达、科技与杂谈，
+          每日一篇短文，帮你把零散的知识连成网络，慢慢长出更清醒的判断力。
+        </p>
+        <div class="hero-stats" id="heroStats"><!-- JS 注入 --></div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2 class="section-title">今日推荐</h2>
+          <span class="section-hint">最新更新的一篇</span>
+        </div>
+        <div id="featured"><!-- JS 注入 --></div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2 class="section-title">最近更新</h2>
+          <span class="section-hint" id="listHint"></span>
+        </div>
+        <div id="postList" class="post-grid"><!-- JS 注入 --></div>
+        <div id="emptyState" class="empty-state" hidden>没有找到匹配的内容，换个关键词试试？</div>
+      </section>
+    </section>
+
+    <!-- 文章详情视图 -->
+    <section id="view-post" class="view" hidden>
+      <button class="back-btn" id="backBtn">← 返回</button>
+      <article class="post" id="postArticle"><!-- JS 注入 --></article>
+      <div class="post-foot">
+        <button class="ghost-btn" id="randomBtn">🎲 随机一篇</button>
+      </div>
+    </section>
+
+    <!-- 搜索结果视图 -->
+    <section id="view-search" class="view" hidden>
+      <div class="section-head">
+        <h2 class="section-title" id="searchTitle">搜索结果</h2>
+      </div>
+      <div id="searchList" class="post-grid"><!-- JS 注入 --></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div>
+        <strong>知元 · 通识学社</strong>
+        <p class="footer-note">一个面向大学生的通识阅读小站。每日新增一篇，欢迎常来。</p>
+      </div>
+      <div class="footer-links">
+        <a href="#/" >首页</a>
+        <a href="https://github.com/" target="_blank" rel="noopener">GitHub</a>
+        <a href="README.md">使用说明</a>
+      </div>
+    </div>
+    <p class="copyright">© <span id="year"></span> 知元 · 通识学社 · 内容由本站编辑每日整理发布</p>
+  </footer>
+
+  <script src="assets/js/marked.min.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,135 @@
+[
+  {
+    "id": "2026-09-29-management-delayed-gratification",
+    "title": "为什么“延迟满足”是顶级自律的底层逻辑",
+    "date": "2026-09-29",
+    "category": "management",
+    "subcategory": "",
+    "summary": "真正的自律不是靠意志力硬扛，而是懂得延迟满足——用策略为未来的自己投资。",
+    "tags": [
+      "自律",
+      "行为经济学",
+      "习惯"
+    ],
+    "file": "content/2026-09-29-management-delayed-gratification.md",
+    "author": "知元编辑部"
+  },
+  {
+    "id": "2026-09-28-philosophy-occam-razor",
+    "title": "奥卡姆剃刀：如无必要，勿增实体",
+    "date": "2026-09-28",
+    "category": "philosophy",
+    "subcategory": "",
+    "summary": "当多个解释都能说明现象时，假设最少的那个通常最可靠。但别误用它。",
+    "tags": [
+      "思维模型",
+      "逻辑",
+      "简约"
+    ],
+    "file": "content/2026-09-28-philosophy-occam-razor.md",
+    "author": "知元编辑部"
+  },
+  {
+    "id": "2026-09-27-psychology-confirmation-bias",
+    "title": "证实偏差：我们如何被自己的信念骗了",
+    "date": "2026-09-27",
+    "category": "psychology",
+    "subcategory": "",
+    "summary": "一旦相信某事，就只盯支持证据。识别它，是清醒的开始。",
+    "tags": [
+      "认知偏差",
+      "批判性思维"
+    ],
+    "file": "content/2026-09-27-psychology-confirmation-bias.md",
+    "author": "知元编辑部"
+  },
+  {
+    "id": "2026-09-26-sociology-broken-windows",
+    "title": "破窗效应与社会秩序的微妙平衡",
+    "date": "2026-09-26",
+    "category": "sociology",
+    "subcategory": "",
+    "summary": "小失序会释放“没人管”的信号。及时修复微小的失序，是最好的预防。",
+    "tags": [
+      "社会秩序",
+      "群体行为"
+    ],
+    "file": "content/2026-09-26-sociology-broken-windows.md",
+    "author": "知元编辑部"
+  },
+  {
+    "id": "2026-09-25-communication-nvc",
+    "title": "非暴力沟通：把“你错了”换成“我需要”",
+    "date": "2026-09-25",
+    "category": "communication",
+    "subcategory": "",
+    "summary": "观察—感受—需要—请求，四步把指责变成可被看见的需要。",
+    "tags": [
+      "沟通",
+      "表达",
+      "关系"
+    ],
+    "file": "content/2026-09-25-communication-nvc.md",
+    "author": "知元编辑部"
+  },
+  {
+    "id": "2026-09-24-ai-tech-how-llm-works",
+    "title": "大模型是怎么“理解”语言的？一篇通俗解释",
+    "date": "2026-09-24",
+    "category": "ai-tech",
+    "subcategory": "",
+    "summary": "它不懂，但极擅长预测。分词、向量、注意力、预测下一个词——通俗拆解。",
+    "tags": [
+      "大模型",
+      "AI",
+      "科普"
+    ],
+    "file": "content/2026-09-24-ai-tech-how-llm-works.md",
+    "author": "知元编辑部"
+  },
+  {
+    "id": "2026-09-23-misc-meme-culture",
+    "title": "为什么我们爱用“梗”？网络语言的社交密码",
+    "date": "2026-09-23",
+    "category": "misc",
+    "subcategory": "文化",
+    "summary": "梗承担身份识别、情绪压缩与安全距离三种功能，但别让它替代真实表达。",
+    "tags": [
+      "网络文化",
+      "语言",
+      "社交"
+    ],
+    "file": "content/2026-09-23-misc-meme-culture.md",
+    "author": "知元编辑部"
+  },
+  {
+    "id": "2026-09-22-misc-literature-little-prince",
+    "title": "重读《小王子》：所有大人都曾是孩子",
+    "date": "2026-09-22",
+    "category": "misc",
+    "subcategory": "文学",
+    "summary": "表面是童话，内里是给大人看的清醒剂。别在长大里弄丢最珍贵的东西。",
+    "tags": [
+      "文学",
+      "经典",
+      "成长"
+    ],
+    "file": "content/2026-09-22-misc-literature-little-prince.md",
+    "author": "知元编辑部"
+  },
+  {
+    "id": "2026-09-21-misc-geography-cities-near-water",
+    "title": "城市为什么大多依水而建？",
+    "date": "2026-09-21",
+    "category": "misc",
+    "subcategory": "地理",
+    "summary": "运输、饮水、防御与贸易节点——老城的中心，常是那座最早的码头。",
+    "tags": [
+      "地理",
+      "城市",
+      "历史"
+    ],
+    "file": "content/2026-09-21-misc-geography-cities-near-water.md",
+    "author": "知元编辑部"
+  }
+]
