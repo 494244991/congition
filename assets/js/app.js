@@ -73,18 +73,36 @@ function parsePostsJs(txt) {
   if (!m) return null;
   try { const a = JSON.parse(m[1]); return Array.isArray(a) ? a : null; } catch { return null; }
 }
-// 从 jsDelivr（CORS 友好、无限流）拉取最新 posts.js；带分钟级缓存击穿参数，保证回源到最新
+// 读者端拉取最新 posts.js 的候选源（按顺序尝试，前一个失败才用下一个）
+//   1) 同源 GitHub Pages —— 无 CORS 问题、国内可达性最好，且带分钟级缓存击穿参数强制回源
+//   2) raw.githubusercontent.com —— 公开、CORS:*，作为备用
+//   3) jsDelivr —— 国内偶发不可达，仅作最后兜底
+function liveUrls(cfg) {
+  const repo = cfg.repo, branch = cfg.branch || "main";
+  const q = "?_=" + Math.floor(Date.now() / 60000); // 每分钟变一次 → 每次都是新 URL → 绕过 CDN 缓存
+  const list = [];
+  if (location.protocol === "http:" || location.protocol === "https:")
+    list.push("./content/posts.js" + q);                       // 同源（站点自身）
+  list.push(`https://raw.githubusercontent.com/${repo}/${branch}/content/posts.js${q}`);
+  list.push(`https://cdn.jsdelivr.net/gh/${repo}@${branch}/content/posts.js${q}`);
+  return list;
+}
+let __liveSrc = "";
 async function fetchLivePosts() {
   const cfg = readConfig();
   if (!cfg.repo) return null;
-  const bust = Math.floor(Date.now() / 60000); // 每分钟变一次，强制回源
-  const url = `https://cdn.jsdelivr.net/gh/${cfg.repo}@${cfg.branch || "main"}/content/posts.js?_=${bust}`;
-  try {
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) return null;
-    const txt = await res.text();
-    return parsePostsJs(txt);
-  } catch (e) { console.warn("live fetch failed:", e && e.message); return null; }
+  let lastErr = null;
+  for (const url of liveUrls(cfg)) {
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) continue;
+      const txt = await res.text();
+      const arr = parsePostsJs(txt);
+      if (arr && arr.length) { __liveSrc = url.includes("github.io") ? "Pages" : (url.includes("raw.githubusercontent") ? "raw" : "jsDelivr"); return arr; }
+    } catch (e) { lastErr = e; }
+  }
+  if (lastErr) console.warn("live fetch all failed:", lastErr && lastErr.message);
+  return null;
 }
 let __baseSig = "";
 function baseSignature(arr) { return (arr || []).map(p => p.id).sort().join("|"); }
@@ -107,7 +125,8 @@ function updateLastUpdated() {
   const el = $("#syncInfo");
   if (!el) return;
   const t = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
-  el.textContent = "已同步 " + t;
+  const src = __liveSrc ? " · " + __liveSrc : "";
+  el.textContent = "已同步 " + t + src;
 }
 
 async function ghGet(path, cfg) {
@@ -622,10 +641,14 @@ function init() {
   initForm();
   window.addEventListener("hashchange", router);
   router();
-  // 读者端：打开即同步最新内容（jsDelivr 公开镜像，无需任何配置），并每 60 秒自动轮询
+  // 读者端：打开即同步最新内容（同源 GitHub Pages 为主，raw / jsDelivr 兜底，无需任何配置），并定时轮询
   refreshFromGitHub(true).then(ok => { if (ok) updateModeBadge(); });
   setInterval(() => {
     if (document.visibilityState === "visible") refreshFromGitHub(false);
   }, 60000);
+  // 切回标签页时立即同步一次
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") refreshFromGitHub(false);
+  });
 }
 document.addEventListener("DOMContentLoaded", init);
